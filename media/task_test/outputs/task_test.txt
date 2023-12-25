@@ -1,0 +1,2 @@
+Accuracy for LogisticRegression: 0.8532608695652174
+Accuracy for KNeighborsClassifier: 0.8641304347826086

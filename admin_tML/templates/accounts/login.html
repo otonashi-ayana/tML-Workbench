@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+        {% load static %}
+    <meta charset="UTF-8">
+    <title>登录</title>
+    <link rel="shortcut icon" href="#"/>
+    {#    <link rel="stylesheet" type='text/css' href="{% static 'css/public.css' %}">#}
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        .container {
+            position: absolute;
+            left: 73%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            padding: 25px;
+            background: rgba(255, 255, 255, 0.7); /* 半透明背景 */
+            /*border-radius: 5px;*/
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            text-align: left;
+        }
+
+        .copyright-description {
+            font-size: 12px;
+            color: #666;
+            text-align: center;
+        }
+
+        .background-image {
+            background-size: 100% auto;
+            position: fixed;
+            background: url('{% static "assets/img/background/nasa_multi-axis.jpg" %}') no-repeat top center;
+            width: 100%;
+            height: 90%;
+            top: 5%;
+            left: 0;
+            z-index: -1;
+            transition: filter 1s ease-in-out; /* 添加过渡效果 */
+        }
+
+        h2 {
+            margin-bottom: 20px;
+            color: #333;
+        }
+
+        input {
+            margin-bottom: 10px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        button {
+            cursor: pointer;
+            padding: 10px 15px;
+            background-color: #007bff;
+            margin: 5px;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        form {
+    display: flex;
+    flex-direction: column;
+}
+
+        .login-description {
+            margin-top: 20px;
+            font-size: 13px;
+            color: #666;
+        }
+
+        .copyright-description {
+            font-size: 12px;
+            color: #666;
+            text-align: center;
+        }
+
+        .blur {
+            filter: blur(8px); /* 设置虚化效果 */
+        }
+
+    </style>
+</head>
+<body>
+<div class="background-image"></div> <!-- 背景图层 -->
+<div class="container">
+    <h2>Welcome to tML Workbench</h2>
+    <p class="login-description">登录以继续</p>
+    <form method="post" action="{% url 'login' %}">
+        {% csrf_token %}
+        <input type="text" name="username" placeholder="用户名" required id="username">
+        <input type="password" name="password" placeholder="密码" required id="password">
+        <button type="submit">登录</button>
+    </form>
+    <form method="get" action="{% url 'register' %}">
+        <button type="submit">注册</button>
+    </form>
+    <p class="copyright-description">© takashima1e7b97 2023 Copyright.</p>
+</div>
+
+
+</body>
+</html>
+<script>
+    // 获取输入框元素
+    var usernameInput = document.getElementById('username');
+    var passwordInput = document.getElementById('password');
+    var backgroundImage = document.querySelector('.background-image');
+
+    // 为输入框添加聚焦事件监听
+    usernameInput.addEventListener('focus', function () {
+        backgroundImage.classList.add('blur');
+    });
+    passwordInput.addEventListener('focus', function () {
+        backgroundImage.classList.add('blur');
+    });
+
+    // 为输入框添加失焦事件监听
+    usernameInput.addEventListener('blur', function () {
+        backgroundImage.classList.remove('blur');
+    });
+    passwordInput.addEventListener('blur', function () {
+        backgroundImage.classList.remove('blur');
+    });
+</script>
+

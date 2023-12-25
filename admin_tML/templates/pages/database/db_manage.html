@@ -1,0 +1,310 @@
+<!-- db_manage.html -->
+{% extends 'layouts/base.html' %}
+{% load static %}
+
+
+{% block content %}
+    <div class="card-body">
+        <div class="d-flex justify-content-between w-100 flex-wrap">
+            <div class="mb-3 mb-lg-0">
+                <h1 class="h2">数据管理</h1>
+                <p class="mb-0">上传数据集或预览数据集内容，双击单元格可进行修改。</p>
+            </div>
+        </div>
+    </div>
+    <div style="margin-top:15px;" id="databases">
+        {% csrf_token %}
+        <button style="display:inline-block;" id="upload-btn" class="btn btn-primary" type="button">+ 上传数据集
+        </button>
+        <div style="display:inline-block;margin-left:10px;" id="back-to-databases"></div>
+    </div>
+
+    <div style="margin-top:10px;" class="card border-0 shadow mb-4">
+        <div class="card-body">
+            <!-- 表格响应式容器 -->
+            <div class="table-responsive">
+                <table class="table table-centered table-nowrap mb-0 rounded" id="databases-table">
+                    <thead class="thead-light">
+                    <tr>
+                        <th>名称</th>
+                        <th>上传时间</th>
+                        <th>文件大小</th>
+                        <th>下载</th>
+                        <th>预览</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    {% for database in page_obj %}
+                        <tr>
+                            <td>{{ database.name }}</td>
+                            <td>{{ database.uploaded_at }}</td>
+                            <td>{{ database.get_file_size }}</td>
+                            <td><a href="{{ database.get_download_url }}">Download</a></td>
+                            <td>
+                                <button class="btn btn-pill btn-outline-gray-800" type="button"
+                                        onclick="previewDatabase('{{ database.id }}')">Preview
+                                </button>
+                            </td>
+                        </tr>
+                    {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div id="pagination-controls">
+        <button class="btn btn-gray-200" onclick="changePage('prev')">上一页</button>
+        <span id="current-page">1</span> / <span id="total-pages">1</span>
+        <button class="btn btn-gray-200" onclick="changePage('next')">下一页</button>
+        跳转到: <input type="number" id="page-input" min="1" onchange="jumpToPage(this.value)">
+        <button class="btn btn-sm btn-primary"
+                onclick="jumpToPage(document.getElementById('page-input').value)">
+            Go
+        </button>
+    </div>
+
+
+    <script>
+        let currentPage = 1; // 当前页码
+        let totalPages = 1; // 总页数，初始假定为1，将在数据加载后更新
+        const itemsPerPage = 20;
+        const range = 2; // 当前页前后显示的按钮数
+        document.getElementById('upload-btn').addEventListener('click', function () {
+            // 创建一个表单数据对象
+            var formData = new FormData();
+            var fileInput = document.createElement('input');
+            var csrftoken = '{{ csrf_token }}';
+            fileInput.type = 'file';
+            fileInput.onchange = function (e) {
+                formData.append('upload', e.target.files[0]);
+                // 发送 AJAX 请求上传文件
+                fetch('{% url 'db_upload' %}', {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-CSRFToken': csrftoken
+                    }
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.status === 'success') {
+                            // 上传成功，刷新或更新数据集列表
+                            location.reload(); // 简单实现，重新加载页面
+                        } else {
+                            alert(data.message); // 显示错误信息
+                        }
+                    });
+            };
+            fileInput.click(); // 触发文件选择
+        });
+
+        document.getElementById('back-to-databases').addEventListener('click', function () {
+            location.reload();
+        });
+
+        function updateTableForDatabaseRecords(data) {
+            let table = document.getElementById('databases-table');
+            let button_back = document.getElementById('back-to-databases');
+            let thead = table.querySelector('thead');
+            let tbody = table.querySelector('tbody');
+            button_back.innerHTML = ''
+
+            // 设置表头
+            thead.innerHTML = `
+            <tr>
+                <th>名称</th>
+                <th>上传时间</th>
+                <th>文件大小</th>
+                <th>操作</th>
+            </tr>
+        `;
+
+            // 填充表体内容
+            tbody.innerHTML = '';
+            data.forEach((record, index) => {
+                let tr = document.createElement('tr');
+                tr.innerHTML = `
+                <td>${record.name}</td>
+                <td>${record.uploaded_at}</td>
+                <td>${record.size}</td>
+                <td>
+                    <button onclick="previewDatabase('${record.id}')">预览</button>
+                    <a href="/path/to/download/${record.id}">下载</a>
+                </td>
+            `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function previewDatabase(databaseId) {
+            // 发送 AJAX 请求获取数据集内容
+            fetch('/database/db_manage/db_preview/' + databaseId)
+                .then(response => response.json())
+                .then(data => {
+                    {#updateTableForPreview(data);#}
+                    renderHead(data)
+                    currentPreviewData = data; // 存储数据以供分页
+                    totalPages = Math.ceil(data.length / itemsPerPage); // 计算总页数
+                    document.getElementById('total-pages').textContent = totalPages; // 显示总页数
+                    currentPage = 1; // 重置当前页码为1
+                    paginateData(currentPreviewData, currentPage, itemsPerPage); // 显示第一页数据
+
+                });
+
+        }
+
+        function makeCellEditable(cell) {
+            cell.ondblclick = function () {
+                // 记录原始的单元格数据以便恢复
+                const originalContent = cell.innerHTML;
+                // 创建一个输入框包含单元格当前文本
+                cell.innerHTML = `<input type="text" value="${originalContent}" />`;
+                const input = cell.children[0];
+                input.focus();
+
+                // 取得记录ID
+                let recordId = cell.parentNode.dataset.recordId; // 从父元素的data属性中获取
+
+
+                // 处理离开输入框时的保存逻辑
+                input.onblur = function () {
+                    saveCellData(cell, originalContent, input.value, recordId);
+                };
+
+                // 也可以添加键盘事件，如回车键保存
+                input.onkeydown = function (e) {
+                    if (e.key === 'Enter') {
+                        input.blur(); // 触发onblur事件保存数据
+                    }
+                };
+            };
+        }
+
+        function saveCellData(cell, originalContent, newContent, recordId) {
+            if (newContent !== originalContent) {
+                // TODO: 发送数据到服务器更新
+                console.log('保存数据：', newContent);
+                // 假设 `updateDatabaseRecord` 是发送到服务器的函数
+                updateDatabaseRecord(recordId, cell.dataset.fieldName, newContent)
+                    .then(response => {
+                        if (response.ok) {
+                            cell.innerHTML = newContent; // 更新显示的单元格内容
+                        } else {
+                            cell.innerHTML = originalContent; // 失败时恢复原始内容
+                        }
+                    })
+                    .catch(() => {
+                        cell.innerHTML = originalContent; // 出错时恢复原始内容
+                    });
+            } else {
+                // 如果数据没有变更，不发送更新请求，只是移除输入框
+                cell.innerHTML = originalContent;
+            }
+        }
+
+        function renderHead(data) {
+
+            let table = document.getElementById('databases-table');
+            let thead = table.querySelector('thead');
+            {#let tbody = table.querySelector('tbody');#}
+
+            thead.innerHTML = ''; // 清空现有的表头
+            {#tbody.innerHTML = ''; // 清空现有的表体内容#}
+
+            let headerRow = document.createElement('tr');
+            // 添加行号表头
+            let thIndex = document.createElement('th');
+            thIndex.textContent = '#';
+            headerRow.appendChild(thIndex);
+
+            // 基于 JSON 数据的第一行创建表头
+            Object.keys(data[0]).forEach(field => {
+                let th = document.createElement('th');
+                th.textContent = field; // 假设 JSON 的键即字段名
+                headerRow.appendChild(th);
+            });
+
+            // 将表头行添加到 <thead> 中
+            thead.appendChild(headerRow);
+
+        }
+
+        // 渲染分页内容到表格
+        function paginateData(data, pageNumber, itemsPerPage) {
+            // 计算当前页的数据索引范围
+            const startIndex = (pageNumber - 1) * itemsPerPage;
+            const endIndex = startIndex + itemsPerPage;
+
+            // 获取当前页的数据
+            const paginatedItems = data.slice(startIndex, endIndex);
+
+            // 清空表格现有内容
+            const tableBody = document.querySelector("#databases-table tbody");
+            tableBody.innerHTML = '';
+
+            // 填充表格当前页的数据
+            paginatedItems.forEach((item, index) => {
+                let row = tableBody.insertRow();
+                // 假设item是对象，其中的键对应列的名称
+                let cellIndex = row.insertCell();
+                cellIndex.textContent = startIndex + index + 1; // 添加序号
+
+                {#Object.values(item).forEach(text => {#}
+                {#    let cell = row.insertCell();#}
+                {#    cell.textContent = text; });// 添加文本到单元格#}
+
+                Object.keys(item).forEach((fieldName, cellIndex) => {
+                    let cell = row.insertCell(cellIndex);
+                    cell.textContent = item[fieldName]; // 添加文本到单元格
+                    cell.dataset.fieldName = fieldName; // 用于更新操作
+                    makeCellEditable(cell); // 使单元格可编辑
+                });
+
+                row.dataset.recordId = item.id; // 假设每个数据项有一个唯一的id
+            });
+        }
+
+        function updateDatabaseRecord(recordId, fieldName, newValue) {
+            // 创建FormData对象发送数据
+            let formData = new FormData();
+            formData.append('id', recordId);
+            formData.append('field', fieldName);
+            formData.append('value', newValue);
+
+            return fetch('{% url "update-record" %}', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-CSRFToken': '{{ csrf_token }}'
+                }
+            });
+        }
+
+        // 增加页面切换函数
+        function changePage(direction) {
+            if (direction === 'prev' && currentPage > 1) {
+                currentPage--;
+            } else if (direction === 'next' && currentPage < totalPages) {
+                currentPage++;
+            }
+            // 更新页面显示的当前页码
+            document.getElementById('current-page').textContent = currentPage;
+            // 分页数据并更新表格内容
+            paginateData(currentPreviewData, currentPage, itemsPerPage);
+        }
+
+        // 增加跳转到特定页码的函数
+        function jumpToPage(pageNum) {
+            const pageNumber = parseInt(pageNum, 10);
+            if (pageNumber >= 1 && pageNumber <= totalPages) {
+                currentPage = pageNum; // 设置当前页码
+                // 更新页面显示的当前页码
+                document.getElementById('current-page').textContent = currentPage;
+                // 分页数据并更新表格内容
+                paginateData(currentPreviewData, currentPage, itemsPerPage);
+            }
+        }
+
+    </script>
+{% endblock content %}
