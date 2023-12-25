@@ -1,0 +1,199 @@
+{% extends 'layouts/base.html' %}
+{% load static %}
+
+<style>
+    #pagination button {
+        margin: 0 5px;
+        padding: 5px 10px;
+        border: 1px solid #ddd;
+        background-color: #f8f9fa;
+    }
+
+    #pagination button.active {
+        font-weight: bold;
+        background-color: #e9ecef;
+    }
+</style>
+
+{% block content %}
+    <div class="card-body">
+        <div class="d-flex justify-content-between w-100 flex-wrap">
+            <div class="mb-3 mb-lg-0">
+                <h1 class="h2">数据探索性分析 EDA</h1>
+                <p class="mb-0">基于Dtail接口的EDA分析，选择数据集即可跳转到EDA界面进行分析。</p>
+            </div>
+        </div>
+    </div>
+    <div style="margin-top:15px; display: flex; align-items: center; gap: 10px;">
+        <!-- 数据集选择下拉框 -->
+        <div style="flex-grow: 1;">
+            <select style="width:20%;" aria-label="Default select example" class="form-select" id="database-selector">
+                <!-- 选项将通过 JavaScript 动态加载 -->
+            </select>
+        </div>
+        <button style="display:inline-block;" class="btn btn-pill btn-outline-gray-800" type="button"
+                onclick="previewDatabase()">预览
+        </button>
+        <!-- 加载数据集按钮 -->
+        <button style="display:inline-block;margin-left:10px;" class="btn btn-primary" type="button"
+                onclick="load_analyze()">加载数据集
+        </button>
+    </div>
+    <div style="margin-top:10px;" class="card border-0 shadow mb-4">
+        <div class="card-body">
+            <!-- 表格响应式容器 -->
+            <div class="table-responsive">
+                <!-- 表格 -->
+                <table id="databases-table" class="table table-centered table-nowrap mb-0 rounded">
+                    <!-- 表头，将由 JavaScript 动态生成 -->
+                    <thead class="thead-light">
+                    <!-- 动态生成的表头将插入这里 -->
+                    </thead>
+                    <!-- 表体，将由 JavaScript 动态生成 -->
+                    <tbody>
+                    <!-- 动态生成的表格行将插入这里 -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+    <div id="pagination-controls">
+        <button class="btn btn-gray-200" onclick="changePage('prev')">上一页</button>
+        <span id="current-page">1</span> / <span id="total-pages">1</span>
+        <button class="btn btn-gray-200" onclick="changePage('next')">下一页</button>
+        跳转到: <input type="number" id="page-input" min="1" onchange="jumpToPage(this.value)">
+        <button class="btn btn-sm btn-primary"
+                onclick="jumpToPage(document.getElementById('page-input').value)">
+            Go
+        </button>
+    </div>
+
+
+    <script>
+        let currentPage = 1; // 当前页码
+        let totalPages = 1; // 总页数，初始假定为1，将在数据加载后更新
+        const itemsPerPage = 10;
+        const range = 2; // 当前页前后显示的按钮数
+        document.addEventListener('DOMContentLoaded', function () {
+            fetch('{% url 'get_databases' %}')
+                .then(response => response.json())
+                .then(data => {
+                    const selector = document.getElementById('database-selector');
+                    data.forEach(dataset => {
+                        let option = new Option(dataset.name, dataset.id);
+                        selector.add(option);
+                    });
+                });
+        });
+
+        function load_analyze() {
+            const databaseId = document.getElementById('database-selector').value;
+            // 发送请求获取选中的数据集
+            fetch(`/database/db_EDA/analyze_database?database_id=${encodeURIComponent(databaseId)}`)
+                .then(response => {
+                    if (response.redirected) {
+                        window.location.href = response.url;
+                    }
+                })
+                .catch(error => console.error('Error:', error));
+        }
+
+        function previewDatabase() {
+            const selectorId = document.getElementById('database-selector').value;
+            // 发送 AJAX 请求获取数据集内容
+            fetch('/database/db_manage/db_preview/' + selectorId)
+                .then(response => response.json())
+                .then(data => {
+                    renderHead(data)
+                    currentPreviewData = data; // 存储数据以供分页
+                    totalPages = Math.ceil(data.length / itemsPerPage); // 计算总页数
+                    document.getElementById('total-pages').textContent = totalPages; // 显示总页数
+                    currentPage = 1; // 重置当前页码为1
+                    paginateData(currentPreviewData, currentPage, itemsPerPage); // 显示第一页数据
+
+                })
+                .catch(error => console.error('Error:', error));
+        }
+
+        function renderHead(data) {
+
+            let table = document.getElementById('databases-table');
+            let thead = table.querySelector('thead');
+            {#let tbody = table.querySelector('tbody');#}
+
+            thead.innerHTML = ''; // 清空现有的表头
+            {#tbody.innerHTML = ''; // 清空现有的表体内容#}
+
+            let headerRow = document.createElement('tr');
+            // 添加行号表头
+            let thIndex = document.createElement('th');
+            thIndex.textContent = '#';
+            headerRow.appendChild(thIndex);
+
+            // 基于 JSON 数据的第一行创建表头
+            Object.keys(data[0]).forEach(field => {
+                let th = document.createElement('th');
+                th.textContent = field; // 假设 JSON 的键即字段名
+                headerRow.appendChild(th);
+            });
+
+            // 将表头行添加到 <thead> 中
+            thead.appendChild(headerRow);
+
+        }
+
+        function paginateData(data, pageNumber, itemsPerPage) {
+            // 计算当前页的数据索引范围
+            const startIndex = (pageNumber - 1) * itemsPerPage;
+            const endIndex = startIndex + itemsPerPage;
+
+            // 获取当前页的数据
+            const paginatedItems = data.slice(startIndex, endIndex);
+
+            // 清空表格现有内容
+            const tableBody = document.querySelector("#databases-table tbody");
+            tableBody.innerHTML = '';
+
+            // 填充表格当前页的数据
+            paginatedItems.forEach((item, index) => {
+                let row = tableBody.insertRow();
+                // 假设item是对象，其中的键对应列的名称
+                let cellIndex = row.insertCell();
+                cellIndex.textContent = startIndex + index + 1;
+
+                Object.values(item).forEach(text => {
+                    let cell = row.insertCell();
+                    cell.textContent = text; // 添加文本到单元格
+                });
+            });
+        }
+
+        // 增加页面切换函数
+        function changePage(direction) {
+            if (direction === 'prev' && currentPage > 1) {
+                currentPage--;
+            } else if (direction === 'next' && currentPage < totalPages) {
+                currentPage++;
+            }
+            // 更新页面显示的当前页码
+            document.getElementById('current-page').textContent = currentPage;
+            // 分页数据并更新表格内容
+            paginateData(currentPreviewData, currentPage, itemsPerPage);
+        }
+
+        // 增加跳转到特定页码的函数
+        function jumpToPage(pageNum) {
+            const pageNumber = parseInt(pageNum, 10);
+            if (pageNumber >= 1 && pageNumber <= totalPages) {
+                currentPage = pageNum; // 设置当前页码
+                // 更新页面显示的当前页码
+                document.getElementById('current-page').textContent = currentPage;
+                // 分页数据并更新表格内容
+                paginateData(currentPreviewData, currentPage, itemsPerPage);
+            }
+        }
+
+    </script>
+
+{% endblock content %}

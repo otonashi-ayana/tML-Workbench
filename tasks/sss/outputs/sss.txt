@@ -1,0 +1,4 @@
+Accuracy for LogisticRegression: 0.8532608695652174
+Accuracy for KNeighborsClassifier: 0.8641304347826086
+Accuracy for SVC: 0.8641304347826086
+Accuracy for DecisionTreeClassifier: 0.8097826086956522

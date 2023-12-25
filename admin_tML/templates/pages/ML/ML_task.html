@@ -1,0 +1,151 @@
+{% extends 'layouts/base.html' %}
+{% load static %}
+
+{% block extrahead %}
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <meta name="csrf-token" content="{{ csrf_token }}">
+
+{% endblock extrahead %}
+{% block extrastyle %}
+    {#    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css">#}
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/css/select2.min.css" rel="stylesheet"/>
+
+{% endblock extrastyle %}
+
+{% block content %}
+    <div class="card-body">
+        <div class="d-flex justify-content-between w-100 flex-wrap">
+            <div class="mb-3 mb-lg-0">
+                <h1 class="h2">新建训练任务</h1>
+                <p class="mb-0">使用已上传的数据集并设置纳入的目标列与特征列，可以一次选择多个模型算法、评估方法。</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="d-flex flex-wrap ">
+        <div style="width:49%;margin: 5px" class="card border-0 shadow components-section">
+            <div class="card-body flex-grow-1 me-3" style="flex-basis: 50%;">
+                <div style="margin-le: 15px; vertical-align:middle">
+                    <label for="model-name">模型训练任务名称：</label>
+                    <input style="width:40%;" class="form-control" type="text" id="model-name"
+                           placeholder="输入任务名称">
+                </div>
+
+                <div style="margin: 15px; vertical-align:middle">
+                    <label for="dataset-selector">选择数据集：</label>
+                    <select style="width:40%;" class="form-select" id="dataset-selector">
+                        <!-- 数据集选项将在这里生成 -->
+                    </select>
+                </div>
+
+                <div style="margin: 15px; vertical-align:middle">
+                    <label for="target-column-selector">选择目标列：</label>
+                    <select style="width:40%;" class="form-select" id="target-column-selector">
+                        <!-- 目标列选项将在这里生成 -->
+                    </select>
+                </div>
+
+                <div style="margin: 15px; vertical-align:middle" id="feature-columns-section">
+                    <label>选择特征列：</label>
+                    <label for="feature-column-selector"></label><select id="feature-column-selector"
+                                                                         class="form-control"
+                                                                         multiple="multiple"
+                                                                         style="width:80%;"></select>
+                    <!-- 特征列标签将在这里生成 -->
+                </div>
+
+                <div style="margin: 15px; vertical-align:middle">
+                    <label for="task-type-selector">选择任务类型：</label>
+                    <select style="width:20%;" class="form-select" id="task-type-selector">
+                        <option value="classification">分类</option>
+                        <option value="regression">回归</option>
+                    </select>
+                </div>
+
+                <div style="margin: 15px; vertical-align:middle" id="model-algorithm-section">
+                    <label>选择模型算法：</label>
+                    <div style="width:80%;" id="model-algorithm-container">
+                        <!-- 模型算法复选框将在这里生成 -->
+                    </div>
+                </div>
+
+                <div style="margin: 15px; vertical-align:middle" id="model-evaluation-section">
+                    <label>模型评估：</label>
+                    <div id="model-evaluation-container">
+                        <!-- 模型评估方法复选框将在这里生成 -->
+                    </div>
+                </div>
+
+                <button style="margin: 15px; vertical-align:middle" class="btn btn-primary" id="submit-config-btn">
+                    提交配置
+                </button>
+                <button class="btn btn-primary" style="margin-left: 70px; vertical-align:middle" id="run-script-btn">
+                    运行脚本
+                </button>
+
+            </div>
+        </div>
+        <div style="width:49%;margin: 5px" class="card border-0 shadow components-section">
+            <div class="card-body flex-grow-1" style="flex-basis: 45%;">
+                <div id="algorithm-parameters-section">
+                    <label>算法参数：</label>
+                    <pre id="script-output"></pre>
+                    {#                    <div style="margin: 15px; vertical-align:middle">#}
+                    <div id="images-container"></div>
+                    {#                    </div>#}
+                    <div id="algorithm-parameters-container">
+                        <!-- 算法参数输入框将在这里生成 -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {#        </div>#}
+    </div>
+
+    <script>
+        document.getElementById('run-script-btn').addEventListener('click', function () {
+            const scriptFilename = "{{ script_filename }}";
+            const scriptPath = "{{ script_path }}";
+            const task_name = "{{ task.name }}";
+
+            const url = `/ML/run_script?script_filename=${encodeURIComponent(scriptFilename)}&script_path=${encodeURIComponent(scriptPath)}&task_name=${encodeURIComponent(task_name)}`;
+
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'Script is running') {
+                        pollForOutput(data.output_file_path, data.image_dir_path, task_name);
+                    }
+                });
+        });
+
+        function pollForOutput(output_file_path, image_dir_path, task_name) {
+            // 每隔一段时间请求最新的输出
+            setInterval(() => {
+                fetch('/ML/get_output?output_file_path=' + encodeURIComponent(output_file_path) +
+                    '&image_dir_path=' + encodeURIComponent(image_dir_path) + '&task_name=' + encodeURIComponent(task_name))
+                    .then(response => response.json())
+                    .then(data => {
+                        document.getElementById('script-output').textContent = data.output;
+
+                        const imagesContainer = document.getElementById('images-container');
+                        imagesContainer.innerHTML = ''; // 清空旧的图片内容
+                        data.image_urls.forEach(url => {
+                            const img = document.createElement('img');
+                            img.src = url;
+                            img.alt = 'Generated Chart';
+                            {#img.style = "max-width: 100%; height: auto; display: block; margin-bottom: 10px;";#}
+                            {#img.className = 'img-fluid';#}
+
+                            imagesContainer.appendChild(img);
+                        });
+                    },); // 每1秒请求一次
+            }, 3000)
+        }
+    </script>
+{% endblock content %}
+{% block extra_js %}
+    <script src="{% static 'assets/js/ML_task.js' %}"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/js/select2.min.js"></script>
+{% endblock extra_js %}
